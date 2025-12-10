@@ -1,5 +1,31 @@
 # Changelog
 
+## [1.2.0] - 2025-12-10
+
+### Added
+- **Multi-provider AI support**: Added OpenAI support alongside Claude
+- **Environment configuration**: `.env` file support for AI provider settings
+- **AI-powered markdown generation**: Generate comprehensive API reference documentation using LLMs
+- **Provider flexibility**: Easily switch between Claude and OpenAI models
+- **Cost estimation**: Documented pricing for all supported models
+
+### Changed
+- Configuration now uses environment variables via `.env` file
+- API keys are now configured per-provider (ANTHROPIC_API_KEY, OPENAI_API_KEY)
+- Consolidated all documentation into single `README.md` file
+- CLI `--with-docs` flag now generates markdown using configured AI provider
+
+### Documentation
+- Created comprehensive single README with all setup and usage information
+- Added provider comparison and cost estimation tables
+- Added troubleshooting section for common issues
+- Removed separate documentation files (ENV-SETUP.md, LLM-DOCS.md, EXCLUSIONS.md)
+
+### Dependencies
+- Added `@anthropic-ai/sdk` ^0.32.1
+- Added `openai` ^4.73.0
+- Added `dotenv` ^16.4.5
+
 ## [1.1.0] - 2025-12-08
 
 ### Added

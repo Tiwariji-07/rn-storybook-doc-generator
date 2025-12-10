@@ -99,6 +99,57 @@ export class DocumentationGenerator {
   }
 
   /**
+   * Apply configuration filters to component documentation
+   */
+  private filterComponentDoc(doc: ComponentDoc): ComponentDoc {
+    const config = this.config.documentation;
+
+    // Filter props
+    const filteredProps = doc.props.filter(prop => {
+      // Check global exclusions
+      if (config.excludeProps.includes(prop.name)) return false;
+
+      // Check inherited exclusions
+      if (prop.inherited && config.excludeInheritedProps.includes(prop.name)) {
+        return false;
+      }
+
+      // Check component-specific exclusions
+      const overrides = config.componentOverrides[doc.componentName];
+      if (overrides?.excludeProps?.includes(prop.name)) return false;
+
+      return true;
+    });
+
+    // Filter methods
+    const filteredMethods = doc.methods.filter(method => {
+      if (config.excludeMethods.includes(method.name)) return false;
+
+      const overrides = config.componentOverrides[doc.componentName];
+      if (overrides?.excludeMethods?.includes(method.name)) return false;
+
+      return true;
+    });
+
+    // Filter style classes
+    const filteredStyles = doc.styles.filter(style => {
+      if (config.excludeStyleClasses.includes(style.className)) return false;
+
+      const overrides = config.componentOverrides[doc.componentName];
+      if (overrides?.excludeStyleClasses?.includes(style.className)) return false;
+
+      return true;
+    });
+
+    return {
+      ...doc,
+      props: filteredProps,
+      methods: filteredMethods,
+      styles: filteredStyles,
+    };
+  }
+
+  /**
    * Generate documentation for a single component
    */
   generateComponentDoc(componentPath: string, category: string): ComponentDoc | null {
@@ -166,7 +217,7 @@ export class DocumentationGenerator {
         }
       }
 
-      return {
+      const doc: ComponentDoc = {
         componentName,
         componentPath,
         category,
@@ -176,6 +227,9 @@ export class DocumentationGenerator {
         styles,
         baseClass,
       };
+
+      // Apply filters before returning
+      return this.filterComponentDoc(doc);
     } catch (error) {
       console.error(`Error generating docs for ${componentPath}:`, error);
       return null;

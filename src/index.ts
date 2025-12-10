@@ -8,6 +8,8 @@ import { Command } from 'commander';
 import * as path from 'path';
 import * as fs from 'fs';
 import { DocumentationGenerator } from './doc-generator.js';
+import { LLMDocGenerator } from './llm-doc-generator.js';
+import { DEFAULT_CONFIG, getApiKey } from './config.js';
 
 const program = new Command();
 
@@ -24,7 +26,8 @@ program
   .option('-o, --output <path>', 'Output directory', './output')
   .option('-l, --library <path>', 'Path to @wavemaker/app-rn-runtime', '../rn-widgets-storybook/node_modules/@wavemaker/app-rn-runtime')
   .option('--single-file', 'Generate a single JSON file with all components')
-  .action((options) => {
+  .option('--with-docs', 'Generate markdown documentation using LLM (requires ANTHROPIC_API_KEY)')
+  .action(async (options) => {
     const libraryPath = path.resolve(process.cwd(), options.library);
     const outputPath = path.resolve(process.cwd(), options.output);
 
@@ -42,6 +45,25 @@ program
 
     const generator = new DocumentationGenerator(libraryPath);
 
+    // Initialize LLM generator if --with-docs flag is present
+    let llmGenerator: LLMDocGenerator | null = null;
+    if (options.withDocs) {
+      const provider = DEFAULT_CONFIG.llm.provider;
+      const apiKey = getApiKey(provider);
+
+      if (!apiKey) {
+        console.error(`\nError: API key not set for provider '${provider}'`);
+        console.error(`Please set ${provider === 'claude' ? 'ANTHROPIC_API_KEY' : 'OPENAI_API_KEY'} in .env file`);
+        console.error('Or copy .env.example to .env and add your API key\n');
+        process.exit(1);
+      }
+
+      llmGenerator = new LLMDocGenerator(DEFAULT_CONFIG.llm, apiKey);
+      console.log(`✓ LLM documentation generation enabled`);
+      console.log(`  Provider: ${provider}`);
+      console.log(`  Model: ${DEFAULT_CONFIG.llm.model}\n`);
+    }
+
     if (options.all) {
       console.log('Generating documentation for all components...\n');
       const docs = generator.generateAllDocs();
@@ -56,7 +78,29 @@ program
         }
       }
 
-      console.log(`\nGenerated documentation for ${docs.length} components`);
+      console.log(`\n✓ Generated JSON for ${docs.length} components`);
+
+      // Generate LLM docs if requested
+      if (llmGenerator) {
+        console.log(`\nGenerating markdown documentation with LLM...`);
+        let successCount = 0;
+        let errorCount = 0;
+
+        for (const doc of docs) {
+          try {
+            await llmGenerator.generateAndSave(doc);
+            successCount++;
+          } catch (error) {
+            console.error(`✗ Failed to generate docs for ${doc.componentName}:`, error instanceof Error ? error.message : error);
+            errorCount++;
+          }
+        }
+
+        console.log(`\n✓ Generated markdown for ${successCount} components`);
+        if (errorCount > 0) {
+          console.log(`✗ Failed: ${errorCount} components`);
+        }
+      }
     } else if (options.component) {
       console.log(`Generating documentation for ${options.component}...\n`);
 
@@ -78,7 +122,19 @@ program
       const doc = generator.generateComponentDoc(component.path, component.category);
       if (doc) {
         generator.saveComponentDoc(doc, outputPath);
-        console.log('\nDocumentation generated successfully!');
+        console.log('\n✓ JSON documentation generated successfully!');
+
+        // Generate LLM docs if requested
+        if (llmGenerator) {
+          try {
+            console.log('\nGenerating markdown documentation with LLM...');
+            await llmGenerator.generateAndSave(doc);
+            console.log('✓ Markdown documentation generated successfully!');
+          } catch (error) {
+            console.error('✗ Failed to generate markdown:', error instanceof Error ? error.message : error);
+            process.exit(1);
+          }
+        }
       } else {
         console.error('Error: Failed to generate documentation');
         process.exit(1);
