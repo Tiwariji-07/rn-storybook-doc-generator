@@ -191,12 +191,60 @@ export class DocumentationGenerator {
         }
       }
 
-      // Extract events from props
-      const events: EventInfo[] = TypeScriptParser.extractEvents(allProps).map(e => ({
+      // Extract events from both props and invokeEventCallback calls
+      const propsEvents: EventInfo[] = TypeScriptParser.extractEvents(allProps).map(e => ({
         name: e.name,
         type: e.type,
         parameters: this.extractEventParameters(e.type),
       }));
+
+      // Extract events from JavaScript invokeEventCallback calls
+      // We need to scan both the component itself and any referenced components it uses
+      const jsFile = path.join(componentPath, `${componentName}.component.js`);
+      let callbackEvents: EventInfo[] = [];
+
+      if (fs.existsSync(jsFile)) {
+        const jsContent = fs.readFileSync(jsFile, 'utf-8');
+
+        // Extract events from this component
+        const events = TypeScriptParser.extractEventCallbacks(jsContent);
+        events.forEach(e => {
+          callbackEvents.push({
+            name: e.name,
+            type: 'Function',
+            parameters: e.parameters,
+          });
+        });
+
+        // Find all referenced component files that this component imports/uses
+        // Look for patterns like: import { Tappable } from '...path.../tappable.component'
+        // or React.createElement(Tappable, ...)
+        const referencedComponents = this.findReferencedComponents(jsContent);
+
+        // Extract events from referenced components
+        for (const refComponentPath of referencedComponents) {
+          if (fs.existsSync(refComponentPath)) {
+            const refContent = fs.readFileSync(refComponentPath, 'utf-8');
+            const refEvents = TypeScriptParser.extractEventCallbacks(refContent);
+            refEvents.forEach(e => {
+              // Only add if not already present
+              if (!callbackEvents.find(existing => existing.name === e.name)) {
+                callbackEvents.push({
+                  name: e.name,
+                  type: 'Function',
+                  parameters: e.parameters,
+                });
+              }
+            });
+          }
+        }
+      }
+
+      // Merge events, preferring callback events over prop events (more accurate parameters)
+      const eventMap = new Map<string, EventInfo>();
+      propsEvents.forEach(e => eventMap.set(e.name, e));
+      callbackEvents.forEach(e => eventMap.set(e.name, e)); // Overwrites if duplicate
+      const events: EventInfo[] = Array.from(eventMap.values());
 
       // Parse styles
       let styles: StyleInfo[] = [];
@@ -234,6 +282,29 @@ export class DocumentationGenerator {
       console.error(`Error generating docs for ${componentPath}:`, error);
       return null;
     }
+  }
+
+  /**
+   * Find all referenced component files that this component imports/uses
+   * Looks for import statements to find dependencies
+   */
+  private findReferencedComponents(jsContent: string): string[] {
+    const componentPaths: string[] = [];
+
+    // Match import statements like: import { Tappable } from '@wavemaker/app-rn-runtime/core/tappable.component'
+    // or: from '@wavemaker/app-rn-runtime/components/basic/animatedview.component'
+    const importPattern = /from\s+['"]@wavemaker\/app-rn-runtime\/((?:core|components)\/[^'"]+)['"]/g;
+
+    let match;
+    while ((match = importPattern.exec(jsContent)) !== null) {
+      const relativePath = match[1]; // e.g., 'core/tappable.component'
+
+      // Build full path
+      const fullPath = path.join(this.libraryPath, relativePath + '.js');
+      componentPaths.push(fullPath);
+    }
+
+    return componentPaths;
   }
 
   /**

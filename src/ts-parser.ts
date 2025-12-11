@@ -285,4 +285,40 @@ export class TypeScriptParser {
         type: prop.type,
       }));
   }
+
+  /**
+   * Extract event callbacks from invokeEventCallback calls in JavaScript source
+   * Pattern: invokeEventCallback('onTap', [e, target])
+   */
+  static extractEventCallbacks(sourceCode: string): Array<{ name: string; parameters: string }> {
+    const events: Array<{ name: string; parameters: string }> = [];
+    const eventSet = new Set<string>(); // To avoid duplicates
+
+    // Match: invokeEventCallback('eventName', [params])
+    // This regex captures the event name from invokeEventCallback calls
+    const invokePattern = /invokeEventCallback\s*\(\s*['"](\w+)['"]\s*,\s*\[([^\]]*)\]\s*\)/g;
+
+    let match;
+    while ((match = invokePattern.exec(sourceCode)) !== null) {
+      const eventName = match[1]; // e.g., 'onTap', 'onDoubletap', 'onLongtap'
+      const params = match[2].trim(); // e.g., 'e, target'
+
+      if (!eventSet.has(eventName)) {
+        eventSet.add(eventName);
+
+        // Clean up parameters - extract variable names
+        const paramList = params
+          .split(',')
+          .map(p => p.trim())
+          .filter(p => p && p !== 'this.props.target' && p !== 'target');
+
+        events.push({
+          name: eventName,
+          parameters: paramList.length > 0 ? `(${paramList.join(', ')})` : '()'
+        });
+      }
+    }
+
+    return events;
+  }
 }

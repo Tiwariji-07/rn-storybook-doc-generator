@@ -3,24 +3,24 @@
  * Generates markdown documentation from ComponentDoc JSON using AI
  */
 
-import Anthropic from '@anthropic-ai/sdk';
-import OpenAI from 'openai';
-import { ComponentDoc } from './types.js';
-import { GeneratorConfig } from './config.js';
-import * as fs from 'fs';
-import * as path from 'path';
+import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
+import { ComponentDoc } from "./types.js";
+import { GeneratorConfig } from "./config.js";
+import * as fs from "fs";
+import * as path from "path";
 
 export class LLMDocGenerator {
   private anthropic: Anthropic | null = null;
   private openai: OpenAI | null = null;
-  private config: GeneratorConfig['llm'];
+  private config: GeneratorConfig["llm"];
 
-  constructor(config: GeneratorConfig['llm'], apiKey?: string) {
+  constructor(config: GeneratorConfig["llm"], apiKey?: string) {
     this.config = config;
 
-    if (config.provider === 'claude' && apiKey) {
+    if (config.provider === "claude" && apiKey) {
       this.anthropic = new Anthropic({ apiKey });
-    } else if (config.provider === 'openai' && apiKey) {
+    } else if (config.provider === "openai" && apiKey) {
       this.openai = new OpenAI({ apiKey });
     }
   }
@@ -30,12 +30,12 @@ export class LLMDocGenerator {
    */
   async generateMarkdown(componentDoc: ComponentDoc): Promise<string> {
     switch (this.config.provider) {
-      case 'claude':
+      case "claude":
         return this.generateWithClaude(componentDoc);
-      case 'openai':
+      case "openai":
         return this.generateWithOpenAI(componentDoc);
-      case 'ollama':
-        throw new Error('Ollama provider not yet implemented');
+      case "ollama":
+        throw new Error("Ollama provider not yet implemented");
       default:
         throw new Error(`Unknown provider: ${this.config.provider}`);
     }
@@ -44,28 +44,34 @@ export class LLMDocGenerator {
   /**
    * Generate documentation using Claude
    */
-  private async generateWithClaude(componentDoc: ComponentDoc): Promise<string> {
+  private async generateWithClaude(
+    componentDoc: ComponentDoc
+  ): Promise<string> {
     if (!this.anthropic) {
-      throw new Error('Claude API not initialized. Please provide ANTHROPIC_API_KEY');
+      throw new Error(
+        "Claude API not initialized. Please provide ANTHROPIC_API_KEY"
+      );
     }
 
     const prompt = this.buildPrompt(componentDoc);
 
-    console.log(`Generating docs for ${componentDoc.componentName} with Claude...`);
+    console.log(
+      `Generating docs for ${componentDoc.componentName} with Claude...`
+    );
 
     const message = await this.anthropic.messages.create({
-      model: this.config.model || 'claude-3-5-sonnet-20240620',
+      model: this.config.model || "claude-3-5-sonnet-20240620",
       max_tokens: 4000,
       messages: [
         {
-          role: 'user',
+          role: "user",
           content: prompt,
         },
       ],
     });
 
     const content = message.content[0];
-    const markdown = content.type === 'text' ? content.text : '';
+    const markdown = content.type === "text" ? content.text : "";
 
     return this.formatMarkdown(componentDoc, markdown);
   }
@@ -73,24 +79,31 @@ export class LLMDocGenerator {
   /**
    * Generate documentation using OpenAI
    */
-  private async generateWithOpenAI(componentDoc: ComponentDoc): Promise<string> {
+  private async generateWithOpenAI(
+    componentDoc: ComponentDoc
+  ): Promise<string> {
     if (!this.openai) {
-      throw new Error('OpenAI API not initialized. Please provide OPENAI_API_KEY');
+      throw new Error(
+        "OpenAI API not initialized. Please provide OPENAI_API_KEY"
+      );
     }
 
     const prompt = this.buildPrompt(componentDoc);
 
-    console.log(`Generating docs for ${componentDoc.componentName} with OpenAI...`);
+    console.log(
+      `Generating docs for ${componentDoc.componentName} with OpenAI...`
+    );
 
     const completion = await this.openai.chat.completions.create({
-      model: this.config.model || 'gpt-4-turbo-preview',
+      model: this.config.model || "gpt-4-turbo-preview",
       messages: [
         {
-          role: 'system',
-          content: 'You are a technical documentation expert for React Native components. Generate clear, concise API reference documentation.',
+          role: "system",
+          content:
+            "You are a technical documentation expert for React Native components. Generate clear, concise API reference documentation.",
         },
         {
-          role: 'user',
+          role: "user",
           content: prompt,
         },
       ],
@@ -98,7 +111,7 @@ export class LLMDocGenerator {
       temperature: 0.3, // Lower temperature for more consistent technical docs
     });
 
-    const markdown = completion.choices[0]?.message?.content || '';
+    const markdown = completion.choices[0]?.message?.content || "";
 
     return this.formatMarkdown(componentDoc, markdown);
   }
@@ -107,8 +120,8 @@ export class LLMDocGenerator {
    * Build prompt for LLM
    */
   private buildPrompt(doc: ComponentDoc): string {
-    const ownProps = doc.props.filter(p => !p.inherited);
-    const inheritedProps = doc.props.filter(p => p.inherited);
+    const ownProps = doc.props.filter((p) => !p.inherited);
+    const inheritedProps = doc.props.filter((p) => p.inherited);
 
     return `You are a technical documentation expert for React Native components.
 
@@ -116,22 +129,43 @@ Generate comprehensive API reference documentation for this component:
 
 **Component**: ${doc.componentName}
 **Category**: ${doc.category}
-**Base Class**: ${doc.baseClass || 'None'}
+**Base Class**: ${doc.baseClass || "None"}
 
 **Component Props** (${ownProps.length}):
-${ownProps.map(p => `- ${p.name} (${p.type}): default=${p.defaultValue || 'undefined'}${!p.optional ? ' [REQUIRED]' : ''}`).join('\n')}
+${ownProps
+  .map(
+    (p) =>
+      `- ${p.name} (${p.type}): default=${p.defaultValue || "undefined"}${
+        !p.optional ? " [REQUIRED]" : ""
+      }`
+  )
+  .join("\n")}
 
 **Inherited Props** (${inheritedProps.length}):
-${inheritedProps.map(p => `- ${p.name} (${p.type}): default=${p.defaultValue} [from ${p.inheritedFrom}]`).join('\n')}
+${inheritedProps
+  .map(
+    (p) =>
+      `- ${p.name} (${p.type}): default=${p.defaultValue} [from ${p.inheritedFrom}]`
+  )
+  .join("\n")}
 
 **Methods** (${doc.methods.length}):
-${doc.methods.map(m => `- ${m.name}(${m.parameters.map(p => `${p.name}: ${p.type}`).join(', ')}): ${m.returnType}`).join('\n')}
+${doc.methods
+  .map(
+    (m) =>
+      `- ${m.name}(${m.parameters
+        .map((p) => `${p.name}: ${p.type}`)
+        .join(", ")}): ${m.returnType}`
+  )
+  .join("\n")}
 
 **Events** (${doc.events.length}):
-${doc.events.map(e => `- ${e.name}: ${e.parameters}`).join('\n')}
+${doc.events.map((e) => `- ${e.name}: ${e.parameters}`).join("\n")}
 
 **Style Classes** (${doc.styles.length}):
-${doc.styles.map(s => `- ${s.className}${s.description ? ` (${s.description})` : ''}`).join('\n')}
+${doc.styles
+  .map((s) => `- ${s.className}${s.description ? ` (${s.description})` : ""}`)
+  .join("\n")}
 
 ---
 
@@ -175,16 +209,10 @@ Format your response as clean, well-structured markdown.`;
    * Format and add metadata to markdown
    */
   private formatMarkdown(doc: ComponentDoc, llmContent: string): string {
-    const timestamp = new Date().toISOString().split('T')[0];
+    const timestamp = new Date().toISOString().split("T")[0];
 
-    return `<!-- AUTO-GENERATED DOCUMENTATION -->
-<!-- DO NOT EDIT THIS FILE MANUALLY -->
+    return `
 <!-- Generated by doc-generator on ${timestamp} -->
-
-# ${doc.componentName} API Reference
-
-**Category**: ${doc.category}
-**Base Class**: ${doc.baseClass || 'None'}
 
 ---
 
@@ -204,11 +232,11 @@ ${llmContent}
   private getTargetPath(componentDoc: ComponentDoc): string {
     // Convert component name to PascalCase with 'Wm' prefix for folder name
     const folderName = this.toWmPascalCase(componentDoc.componentName);
-    const fileName = 'APIReference.md';
+    const fileName = "APIReference.md";
 
     const targetPath = path.join(
       this.config.storybookPath,
-      'components',
+      "components",
       folderName,
       fileName
     );
@@ -222,16 +250,19 @@ ${llmContent}
    */
   private toWmPascalCase(str: string): string {
     const pascalCase = str
-      .split('-')
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-      .join('');
+      .split("-")
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join("");
     return `Wm${pascalCase}`;
   }
 
   /**
    * Save generated markdown to the target path
    */
-  async saveMarkdown(componentDoc: ComponentDoc, markdown: string): Promise<string> {
+  async saveMarkdown(
+    componentDoc: ComponentDoc,
+    markdown: string
+  ): Promise<string> {
     const targetPath = this.getTargetPath(componentDoc);
     const targetDir = path.dirname(targetPath);
 
@@ -244,7 +275,7 @@ ${llmContent}
     }
 
     // Write markdown file
-    fs.writeFileSync(targetPath, markdown, 'utf-8');
+    fs.writeFileSync(targetPath, markdown, "utf-8");
 
     console.log(`✓ Generated: ${path.relative(process.cwd(), targetPath)}`);
 
