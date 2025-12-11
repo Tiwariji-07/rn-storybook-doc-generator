@@ -2,7 +2,7 @@
  * Configuration for documentation generator
  */
 
-import dotenv from 'dotenv';
+import dotenv from "dotenv";
 
 // Load environment variables from .env file
 dotenv.config();
@@ -61,7 +61,7 @@ export interface GeneratorConfig {
     /**
      * AI provider to use
      */
-    provider: 'claude' | 'openai' | 'ollama';
+    provider: "claude" | "openai" | "ollama";
 
     /**
      * Model to use (optional, uses provider default)
@@ -81,7 +81,7 @@ export interface GeneratorConfig {
  */
 export const DEFAULT_CONFIG: GeneratorConfig = {
   // Component discovery exclusions
-  excludeCategories: ['page', 'prefab'],
+  excludeCategories: ["page", "prefab"],
   excludeComponents: [],
 
   // Documentation content filtering
@@ -91,23 +91,23 @@ export const DEFAULT_CONFIG: GeneratorConfig = {
 
     // Inherited props that are rarely used in stories
     excludeInheritedProps: [
-      'listener', // Internal lifecycle
-      'showskeletonchildren', // Advanced feature
-      'deferload', // Advanced feature
-      'isdefault', // Internal flag
-      'key', // React internal
+      "listener", // Internal lifecycle
+      "showskeletonchildren", // Advanced feature
+      "deferload", // Advanced feature
+      "isdefault", // Internal flag
+      "key", // React internal
     ],
 
     // Internal methods not meant for public use
     excludeMethods: [
-      'renderWidget', // Internal render
-      'renderSkeleton', // Internal skeleton render
-      'prepareIcon', // Internal helper
-      'prepareBadge', // Internal helper
-      'updateState', // Internal state
-      'componentDidMount', // React lifecycle
-      'componentWillUnmount', // React lifecycle
-      'componentDidUpdate', // React lifecycle
+      "renderWidget", // Internal render
+      "renderSkeleton", // Internal skeleton render
+      "prepareIcon", // Internal helper
+      "prepareBadge", // Internal helper
+      "updateState", // Internal state
+      "componentDidMount", // React lifecycle
+      "componentWillUnmount", // React lifecycle
+      "componentDidUpdate", // React lifecycle
     ],
 
     // Style classes that are internal
@@ -119,22 +119,27 @@ export const DEFAULT_CONFIG: GeneratorConfig = {
 
   // LLM settings (read from environment variables)
   llm: {
-    provider: (process.env.AI_PROVIDER || 'claude') as 'claude' | 'openai' | 'ollama',
-    model: process.env.AI_MODEL || 'claude-3-5-sonnet-20240620',
-    storybookPath: process.env.STORYBOOK_PATH || '../rn-widgets-storybook',
+    provider: (process.env.AI_PROVIDER || "claude") as
+      | "claude"
+      | "openai"
+      | "ollama",
+    model: process.env.AI_MODEL || "claude-sonnet-4-0",
+    storybookPath: process.env.STORYBOOK_PATH || "../rn-widgets-storybook",
   },
 };
 
 /**
  * Get API key for the configured provider
  */
-export function getApiKey(provider: 'claude' | 'openai' | 'ollama'): string | undefined {
+export function getApiKey(
+  provider: "claude" | "openai" | "ollama"
+): string | undefined {
   switch (provider) {
-    case 'claude':
+    case "claude":
       return process.env.ANTHROPIC_API_KEY;
-    case 'openai':
+    case "openai":
       return process.env.OPENAI_API_KEY;
-    case 'ollama':
+    case "ollama":
       return undefined; // Ollama doesn't need API key
     default:
       return undefined;
