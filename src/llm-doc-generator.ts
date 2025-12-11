@@ -171,14 +171,29 @@ ${doc.styles
 
 Generate professional API reference documentation in markdown format. Include:
 
-1. **Props API Section**
-   - Create a markdown table for Component Props
-   - Create a separate table for Inherited Props
-   - For each prop, write a clear, concise description (1-2 sentences)
-   - Include the type, default value, and whether it's required
+1. **Props Section**
+   - Analyze all component props and intelligently group them by PURPOSE into logical categories
+   - Common categories might include: Content, Layout, Icons, Animation, Interaction, Styling, Accessibility, Loading States, etc.
+   - Choose category names that make sense for THIS specific component
+   - Create a subsection (###) for each category with its own markdown table
+   - Keep "Inherited Props" as a separate subsection at the end
+   - For each prop: write a clear, concise description (1-2 sentences), include type, default value, and whether it's required
    - Make descriptions practical and user-focused
 
-2. **Methods API Section** (if any methods exist)
+   Example structure:
+
+   ## Props
+
+   ### Content
+   | Prop | Type | Default | Required | Description |
+
+   ### Icon Configuration
+   | Prop | Type | Default | Required | Description |
+
+   ### Inherited Props
+   | Prop | Type | Default | Inherited From | Description |
+
+2. **Methods Section** (if any methods exist)
    - Create a markdown table listing each method
    - Describe what the method does and when to use it
    - Document parameters clearly
@@ -187,22 +202,27 @@ Generate professional API reference documentation in markdown format. Include:
    - Create a markdown table for events
    - Explain when each event fires
    - Describe the parameters passed to handlers
+   - Use code formatting for event names and parameters
 
 4. **Style Classes Section** (if any styles exist)
-   - Group style classes by purpose (variants, states, sizes, etc.)
+   - Intelligently group style classes by purpose (variants, states, sizes, themes, etc.)
+   - Create subsections (###) for each group
    - List each class with a brief description of its visual effect
-   - Use bullet points for readability
+   - Use bullet points with code formatting for class names
 
 **Important Guidelines**:
 - DO NOT include example code or usage examples (that's in the manual section)
+- DO NOT include any header comments, timestamps, or "API Reference" titles
+- Start directly with "## Props" as the first heading
 - Focus ONLY on API reference documentation
 - Keep descriptions concise and technical
 - Use markdown tables for props, methods, and events
 - Use bullet lists for style classes
 - Be consistent with formatting
 - If a section is empty (e.g., no events), skip that section entirely
+- Categorize props thoughtfully - use your judgment to create meaningful groups
 
-Format your response as clean, well-structured markdown.`;
+Format your response as clean, well-structured markdown starting directly with "## Props".`;
   }
 
   /**
