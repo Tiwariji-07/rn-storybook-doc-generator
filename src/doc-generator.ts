@@ -46,12 +46,12 @@ export class DocumentationGenerator {
   }
 
   /**
-   * Get inherited props from a base class
+   * Get inherited props from a base class - dynamically resolves ANY parent class
    */
   private getInheritedProps(baseClassName: string): PropInfo[] {
     const inheritedProps: PropInfo[] = [];
 
-    // Handle BaseProps
+    // Handle BaseProps (special case - use cached props)
     if (baseClassName === 'BaseProps') {
       return this.getBaseProps().map(prop => ({
         ...prop,
@@ -60,42 +60,101 @@ export class DocumentationGenerator {
       }));
     }
 
-    // Handle BaseInputProps
-    if (baseClassName === 'BaseInputProps') {
-      const baseInputPath = path.join(
-        this.libraryPath,
-        'components',
-        'input',
-        'baseinput',
-        'baseinput.props.js.map'
-      );
+    // Dynamically find the parent props file
+    const parentPropsPath = this.findParentPropsFile(baseClassName);
 
-      try {
-        const source = SourceExtractor.extractSourceContent(baseInputPath);
-        if (source) {
-          const propsInfo = TypeScriptParser.extractProps(source);
-          if (propsInfo) {
-            // Add BaseInputProps own props
-            inheritedProps.push(
-              ...propsInfo.props.map(prop => ({
-                ...prop,
-                inherited: true,
-                inheritedFrom: 'BaseInputProps',
-              }))
-            );
+    if (!parentPropsPath) {
+      console.warn(`Could not find props file for parent class: ${baseClassName}`);
+      return inheritedProps;
+    }
 
-            // Recursively get BaseProps
-            if (propsInfo.baseClass) {
-              inheritedProps.push(...this.getInheritedProps(propsInfo.baseClass));
-            }
+    try {
+      const source = SourceExtractor.extractSourceContent(parentPropsPath);
+      if (source) {
+        const propsInfo = TypeScriptParser.extractProps(source);
+        if (propsInfo) {
+          // Add parent's own props
+          inheritedProps.push(
+            ...propsInfo.props.map(prop => ({
+              ...prop,
+              inherited: true,
+              inheritedFrom: baseClassName,
+            }))
+          );
+
+          // Recursively get grandparent props
+          if (propsInfo.baseClass) {
+            inheritedProps.push(...this.getInheritedProps(propsInfo.baseClass));
           }
         }
-      } catch (error) {
-        console.error(`Error extracting ${baseClassName}:`, error);
       }
+    } catch (error) {
+      console.error(`Error extracting ${baseClassName}:`, error);
     }
 
     return inheritedProps;
+  }
+
+  /**
+   * Find the props file for a parent class by searching the library
+   * Handles BaseInputProps, BaseChartComponentProps, etc.
+   */
+  private findParentPropsFile(className: string): string | null {
+    // Convert class name to file name pattern
+    // BaseInputProps -> baseinput
+    // BaseChartComponentProps -> basechart
+    // BaseWidgetProps -> basewidget
+
+    let fileName = className
+      .replace(/Props$/, '')  // Remove 'Props' suffix
+      .replace(/Component$/, '')  // Remove 'Component' suffix
+      .toLowerCase();  // Convert to lowercase (baseinput, basechart, etc.)
+
+    const propsFileName = `${fileName}.props.js.map`;
+
+    // Search in common locations
+    const searchPaths = [
+      // Check in components folder (most common)
+      path.join(this.libraryPath, 'components'),
+      // Check in core folder
+      path.join(this.libraryPath, 'core'),
+    ];
+
+    for (const searchPath of searchPaths) {
+      if (!fs.existsSync(searchPath)) continue;
+
+      // Recursively search for the props file
+      const found = this.searchForFile(searchPath, propsFileName);
+      if (found) {
+        return found;
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Recursively search for a file in a directory
+   */
+  private searchForFile(dir: string, targetFileName: string): string | null {
+    try {
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
+
+      for (const entry of entries) {
+        const fullPath = path.join(dir, entry.name);
+
+        if (entry.isDirectory()) {
+          const found = this.searchForFile(fullPath, targetFileName);
+          if (found) return found;
+        } else if (entry.isFile() && entry.name === targetFileName) {
+          return fullPath;
+        }
+      }
+    } catch (error) {
+      // Ignore permission errors, etc.
+    }
+
+    return null;
   }
 
   /**

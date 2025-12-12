@@ -86,14 +86,33 @@ program
         let successCount = 0;
         let errorCount = 0;
 
-        for (const doc of docs) {
-          try {
-            await llmGenerator.generateAndSave(doc);
-            successCount++;
-          } catch (error) {
-            console.error(`✗ Failed to generate docs for ${doc.componentName}:`, error instanceof Error ? error.message : error);
-            errorCount++;
-          }
+        // Process in batches to avoid rate limits
+        const batchSize = DEFAULT_CONFIG.llm.batchSize;
+        const totalBatches = Math.ceil(docs.length / batchSize);
+
+        for (let i = 0; i < docs.length; i += batchSize) {
+          const batch = docs.slice(i, i + batchSize);
+          const batchNumber = Math.floor(i / batchSize) + 1;
+
+          console.log(`\nProcessing batch ${batchNumber}/${totalBatches} (${batch.length} components)...`);
+
+          // Process batch in parallel
+          const results = await Promise.allSettled(
+            batch.map(doc => llmGenerator.generateAndSave(doc))
+          );
+
+          // Count successes and failures
+          results.forEach((result, index) => {
+            if (result.status === 'fulfilled') {
+              successCount++;
+            } else {
+              errorCount++;
+              const doc = batch[index];
+              console.error(`✗ Failed to generate docs for ${doc.componentName}:`, result.reason?.message || result.reason);
+            }
+          });
+
+          console.log(`  Completed: ${successCount}/${docs.length} components`);
         }
 
         console.log(`\n✓ Generated markdown for ${successCount} components`);

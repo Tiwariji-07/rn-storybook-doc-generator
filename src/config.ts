@@ -73,6 +73,13 @@ export interface GeneratorConfig {
      * Files will be saved to: {storybookPath}/components/{ComponentName}/{componentName}.auto.md
      */
     storybookPath: string;
+
+    /**
+     * Number of components to process in parallel
+     * Higher values = faster but may hit rate limits
+     * Recommended: 5-10
+     */
+    batchSize: number;
   };
 }
 
@@ -125,6 +132,7 @@ export const DEFAULT_CONFIG: GeneratorConfig = {
       | "ollama",
     model: process.env.AI_MODEL || "claude-sonnet-4-0",
     storybookPath: process.env.STORYBOOK_PATH || "../rn-widgets-storybook",
+    batchSize: parseInt(process.env.BATCH_SIZE || "5"),
   },
 };
 
