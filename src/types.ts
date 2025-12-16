@@ -48,6 +48,7 @@ export interface ComponentDoc {
   events: EventInfo[];
   styles: StyleInfo[];
   baseClass?: string;
+  children?: ComponentDoc[];
   description?: string;
 }
 

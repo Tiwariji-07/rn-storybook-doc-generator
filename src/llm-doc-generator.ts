@@ -26,14 +26,36 @@ export class LLMDocGenerator {
   }
 
   /**
-   * Generate markdown documentation using LLM
+   * Generate documentation content using LLM for a specific section
    */
-  async generateMarkdown(componentDoc: ComponentDoc): Promise<string> {
+  async generateDocSection(
+    componentDoc: ComponentDoc,
+    section: "overview" | "studio" | "script" | "styling"
+  ): Promise<string> {
+    let prompt = "";
+
+    switch (section) {
+      case "overview":
+        prompt = this.buildOverviewPrompt(componentDoc);
+        break;
+      case "studio":
+        prompt = this.buildStudioPrompt(componentDoc);
+        break;
+      case "script":
+        prompt = this.buildScriptPrompt(componentDoc);
+        break;
+      case "styling":
+        prompt = this.buildStylingPrompt(componentDoc);
+        break;
+    }
+
+    if (!prompt) return "";
+
     switch (this.config.provider) {
       case "claude":
-        return this.generateWithClaude(componentDoc);
+        return this.generateWithClaude(componentDoc, prompt, section);
       case "openai":
-        return this.generateWithOpenAI(componentDoc);
+        return this.generateWithOpenAI(componentDoc, prompt, section);
       case "ollama":
         throw new Error("Ollama provider not yet implemented");
       default:
@@ -45,7 +67,9 @@ export class LLMDocGenerator {
    * Generate documentation using Claude
    */
   private async generateWithClaude(
-    componentDoc: ComponentDoc
+    componentDoc: ComponentDoc,
+    prompt: string,
+    section: string
   ): Promise<string> {
     if (!this.anthropic) {
       throw new Error(
@@ -53,10 +77,8 @@ export class LLMDocGenerator {
       );
     }
 
-    const prompt = this.buildPrompt(componentDoc);
-
     console.log(
-      `Generating docs for ${componentDoc.componentName} with Claude...`
+      `Generating ${section} docs for ${componentDoc.componentName} with Claude...`
     );
 
     const message = await this.anthropic.messages.create({
@@ -71,16 +93,16 @@ export class LLMDocGenerator {
     });
 
     const content = message.content[0];
-    const markdown = content.type === "text" ? content.text : "";
-
-    return this.formatMarkdown(componentDoc, markdown);
+    return content.type === "text" ? content.text : "";
   }
 
   /**
    * Generate documentation using OpenAI
    */
   private async generateWithOpenAI(
-    componentDoc: ComponentDoc
+    componentDoc: ComponentDoc,
+    prompt: string,
+    section: string
   ): Promise<string> {
     if (!this.openai) {
       throw new Error(
@@ -88,10 +110,8 @@ export class LLMDocGenerator {
       );
     }
 
-    const prompt = this.buildPrompt(componentDoc);
-
     console.log(
-      `Generating docs for ${componentDoc.componentName} with OpenAI...`
+      `Generating ${section} docs for ${componentDoc.componentName} with OpenAI...`
     );
 
     const completion = await this.openai.chat.completions.create({
@@ -108,166 +128,134 @@ export class LLMDocGenerator {
         },
       ],
       max_tokens: 4000,
-      temperature: 0.3, // Lower temperature for more consistent technical docs
+      temperature: 0.3,
     });
 
-    const markdown = completion.choices[0]?.message?.content || "";
-
-    return this.formatMarkdown(componentDoc, markdown);
+    return completion.choices[0]?.message?.content || "";
   }
 
   /**
-   * Build prompt for LLM
+   * Build prompt for Overview
    */
-  private buildPrompt(doc: ComponentDoc): string {
-    const ownProps = doc.props.filter((p) => !p.inherited);
-    const inheritedProps = doc.props.filter((p) => p.inherited);
+  private buildOverviewPrompt(doc: ComponentDoc): string {
+    const childNames = doc.children?.map(c => c.componentName).join(", ") || "";
 
-    return `You are a technical documentation expert for React Native components.
+    return `You are a technical documentation expert. Generate an Overview markdown section for the ${doc.componentName} component.
+    
+**Component Context**:
+- Category: ${doc.category}
+- Base Class: ${doc.baseClass}
+- Child Components: ${childNames}
 
-Generate comprehensive API reference documentation for this component:
-
-**Component**: ${doc.componentName}
-**Category**: ${doc.category}
-**Base Class**: ${doc.baseClass || "None"}
-
-**Component Props** (${ownProps.length}):
-${ownProps
-  .map(
-    (p) =>
-      `- ${p.name} (${p.type}): default=${p.defaultValue || "undefined"}${
-        !p.optional ? " [REQUIRED]" : ""
-      }`
-  )
-  .join("\n")}
-
-**Inherited Props** (${inheritedProps.length}):
-${inheritedProps
-  .map(
-    (p) =>
-      `- ${p.name} (${p.type}): default=${p.defaultValue} [from ${p.inheritedFrom}]`
-  )
-  .join("\n")}
-
-**Methods** (${doc.methods.length}):
-${doc.methods
-  .map(
-    (m) =>
-      `- ${m.name}(${m.parameters
-        .map((p) => `${p.name}: ${p.type}`)
-        .join(", ")}): ${m.returnType}`
-  )
-  .join("\n")}
-
-**Events** (${doc.events.length}):
-${doc.events.map((e) => `- ${e.name}: ${e.parameters}`).join("\n")}
-
-**Style Classes** (${doc.styles.length}):
-${doc.styles
-  .map((s) => `- ${s.className}${s.description ? ` (${s.description})` : ""}`)
-  .join("\n")}
-
----
-
-Generate professional API reference documentation in markdown format. Include:
-
-1. **Props Section**
-   - Analyze all component props and intelligently group them by PURPOSE into logical categories
-   - Common categories might include: Content, Layout, Icons, Animation, Interaction, Styling, Accessibility, Loading States, etc.
-   - Choose category names that make sense for THIS specific component
-   - Create a subsection (###) for each category with its own markdown table
-   - Keep "Inherited Props" as a separate subsection at the end
-   - For each prop: write a clear, concise description (1-2 sentences), include type, default value, and whether it's required
-   - Make descriptions practical and user-focused
-
-   Example structure:
-
-   ## Props
-
-   ### Content
-   | Prop | Type | Default | Required | Description |
-
-   ### Icon Configuration
-   | Prop | Type | Default | Required | Description |
-
-   ### Inherited Props
-   | Prop | Type | Default | Inherited From | Description |
-
-2. **Methods Section** (if any methods exist)
-   - Create a markdown table listing each method
-   - Describe what the method does and when to use it
-   - Document parameters clearly
-
-3. **Events Section** (if any events exist)
-   - Create a markdown table for events
-   - Explain when each event fires
-   - Describe the parameters passed to handlers
-   - Use code formatting for event names and parameters
-
-4. **Style Classes Section** (if any styles exist)
-   - Intelligently group style classes by purpose (variants, states, sizes, themes, etc.)
-   - Create subsections (###) for each group
-   - List each class with a brief description of its visual effect
-   - Use bullet points with code formatting for class names
-
-**Important Guidelines**:
-- DO NOT include example code or usage examples (that's in the manual section)
-- DO NOT include any header comments, timestamps, or "API Reference" titles
-- Start directly with "## Props" as the first heading
-- Focus ONLY on API reference documentation
-- Keep descriptions concise and technical
-- Use markdown tables for props, methods, and events
-- Use bullet lists for style classes
-- Be consistent with formatting
-- If a section is empty (e.g., no events), skip that section entirely
-- Categorize props thoughtfully - use your judgment to create meaningful groups
-
-Format your response as clean, well-structured markdown starting directly with "## Props".`;
+**Instructions**:
+1. Write a clear, 1-2 paragraph description of what this component is and its primary use case in a mobile app.
+2. If Child Components exist, briefly mention them and their relationship to the parent (e.g., "It works in conjunction with [Child Name] to...").
+3. Create a "Features" section using a bulleted list highlighting likely features based on these props: ${doc.props.slice(0, 10).map(p => p.name).join(", ")}...
+4. Keep it professional and concise.
+5. Do NOT include code examples here.
+6. Output strict Markdown starting with "# Overview".`;
   }
 
   /**
-   * Format and add metadata to markdown
+   * Build prompt for Studio Props & Events
    */
-  private formatMarkdown(doc: ComponentDoc, llmContent: string): string {
-    const timestamp = new Date().toISOString().split("T")[0];
+  private buildStudioPrompt(doc: ComponentDoc): string {
+    const childProps = doc.children?.map(c => ({
+      component: c.componentName,
+      props: c.props.map(p => ({ name: p.name, type: p.type, default: p.defaultValue, desc: "To be filled" })),
+      events: c.events
+    })) || [];
 
-    return `
-<!-- Generated by doc-generator on ${timestamp} -->
+    return `You are a technical documentation expert. Generate the "Studio Props & Callback Events" documentation for the ${doc.componentName} component.
 
----
+**Data**:
+- Props: ${JSON.stringify(doc.props.map(p => ({ name: p.name, type: p.type, default: p.defaultValue, desc: "To be filled" })))}
+- Events: ${JSON.stringify(doc.events)}
+- Child Components: ${JSON.stringify(childProps)}
 
-${llmContent}
-
----
-
-*This API reference is automatically generated from the component's source code.*
-*For usage examples and best practices, see the manual documentation section above.*
-`;
+**Instructions**:
+1. Start with "# Props and Events".
+2. Create a collapsible details section <details open><summary><strong>${doc.componentName} Props</strong></summary> containing a Markdown table of properties.
+   - Columns: Prop, Type, Default, Description.
+   - Group props logically (e.g., Accessibility, Layout, Behavior, Graphics).
+3. If Child Components exist, create separate collapsible sections for each (e.g., <details><summary><strong>[Child Name] Props</strong></summary>).
+4. Create a collapsible details section <details><summary><strong>Callback Events</strong></summary> containing a Markdown table of events.
+   - Include events from both parent and children (specify source if ambiguous).
+   - Columns: Event, Description.
+5. Add a brief section "Touch Event Callback Behavior" explaining standard WaveMaker studio behavior.
+6. Output strict Markdown.`;
   }
 
   /**
-   * Get the target path for the generated markdown
-   * Format: {storybookPath}/components/Wm{ComponentName}/APIReference.md
+   * Build prompt for Script Props & Methods
    */
-  private getTargetPath(componentDoc: ComponentDoc): string {
-    // Convert component name to PascalCase with 'Wm' prefix for folder name
+  private buildScriptPrompt(doc: ComponentDoc): string {
+    const childCmp = doc.children?.map(c => c.componentName).join(", ") || "";
+
+    return `You are a technical documentation expert. Generate the "Script Props & Methods" documentation for the ${doc.componentName} component.
+
+**Data**:
+- Methods: ${JSON.stringify(doc.methods)}
+- Props: ${JSON.stringify(doc.props.slice(0, 5))} (examples)
+- Child Components: ${childCmp}
+
+**Instructions**:
+1. Start with "# Script Props & Methods".
+2. Explain how to access properties via script (e.g., Page.Widgets.button1.setWidgetProperty("prop", value)).
+3. Provide a "Common Use Cases" section with short JavaScript code blocks showing how to toggle visibility, enable/disable, or other likely common actions for a ${doc.componentName}.
+4. If Child Components exist, mention how to interact with them via script if applicable (typically accessed as children of the widget).
+5. If methods exist, list them in a table or section with parameters and return types.
+6. Output strict Markdown.`;
+  }
+
+  /**
+   * Build prompt for Styling
+   */
+  private buildStylingPrompt(doc: ComponentDoc): string {
+    const childStyles = doc.children?.map(c => ({
+      component: c.componentName,
+      styles: c.styles
+    })) || [];
+
+    return `You are a technical documentation expert. Generate the "Styling" documentation for the ${doc.componentName} component.
+
+**Data**:
+- Style Classes: ${JSON.stringify(doc.styles)}
+- Child Component Styles: ${JSON.stringify(childStyles)}
+
+**Instructions**:
+1. Start with "# Styling".
+2. List the available specific CSS classes for ${doc.componentName}.
+3. If Child Components exist, list their style classes in separate subsections (e.g., ## [Child Name] Styling).
+4. Describe what each class does visually.
+5. If no specific classes, mention ability to use standard app classes.
+6. Output strict Markdown.`;
+  }
+
+  /**
+   * Get target directory for component docs
+   */
+  private getTargetDir(componentDoc: ComponentDoc): string {
     const folderName = this.toWmPascalCase(componentDoc.componentName);
-    const fileName = "APIReference.md";
 
-    const targetPath = path.join(
+    // Manual overrides for specific components
+    let storybookComponentFolder = folderName;
+    if (componentDoc.componentName === 'dialog') {
+      storybookComponentFolder = 'WmDesignDialog';
+    } else if (componentDoc.componentName === 'layoutgrid') {
+      storybookComponentFolder = 'WmGridLayout';
+    } else if (componentDoc.componentName === 'selectlocale') {
+      storybookComponentFolder = 'WmSelectLocale';
+    }
+
+    return path.join(
       this.config.storybookPath,
       "components",
-      folderName,
-      fileName
+      storybookComponentFolder,
+      "docs"
     );
-
-    return targetPath;
   }
 
-  /**
-   * Convert kebab-case or lowercase to PascalCase with 'Wm' prefix
-   * Examples: button -> WmButton, bar-chart -> WmBarChart, anchor -> WmAnchor
-   */
   private toWmPascalCase(str: string): string {
     const pascalCase = str
       .split("-")
@@ -277,36 +265,48 @@ ${llmContent}
   }
 
   /**
-   * Save generated markdown to the target path
+   * Save a single markdown file
    */
-  async saveMarkdown(
-    componentDoc: ComponentDoc,
-    markdown: string
+  async saveFile(
+    targetDir: string,
+    fileName: string,
+    content: string
   ): Promise<string> {
-    const targetPath = this.getTargetPath(componentDoc);
-    const targetDir = path.dirname(targetPath);
-
-    // Ensure directory exists
     if (!fs.existsSync(targetDir)) {
-      console.warn(`Warning: Directory does not exist: ${targetDir}`);
-      console.warn(`Please ensure the component folder exists in storybook`);
-      // Create directory anyway
       fs.mkdirSync(targetDir, { recursive: true });
     }
-
-    // Write markdown file
-    fs.writeFileSync(targetPath, markdown, "utf-8");
-
-    console.log(`✓ Generated: ${path.relative(process.cwd(), targetPath)}`);
-
-    return targetPath;
+    const filePath = path.join(targetDir, fileName);
+    fs.writeFileSync(filePath, content, "utf-8");
+    console.log(`✓ Saved: ${path.relative(process.cwd(), filePath)}`);
+    return filePath;
   }
 
   /**
-   * Generate and save documentation for a component
+   * Generate and save all documentation files
    */
   async generateAndSave(componentDoc: ComponentDoc): Promise<string> {
-    const markdown = await this.generateMarkdown(componentDoc);
-    return this.saveMarkdown(componentDoc, markdown);
+    const targetDir = this.getTargetDir(componentDoc);
+
+    // 1. Overview (skip if exists)
+    if (!fs.existsSync(path.join(targetDir, "overview.md"))) {
+      const overviewContent = await this.generateDocSection(componentDoc, "overview");
+      await this.saveFile(targetDir, "overview.md", overviewContent);
+    } else {
+      console.log(`ℹ Skipped: overview.md (already exists)`);
+    }
+
+    // 2. Studio Props & Events
+    const studioContent = await this.generateDocSection(componentDoc, "studio");
+    await this.saveFile(targetDir, "studio-props-and-events.md", studioContent);
+
+    // 3. Script Props & Methods
+    const scriptContent = await this.generateDocSection(componentDoc, "script");
+    await this.saveFile(targetDir, "script-props-methods.md", scriptContent);
+
+    // 4. Styling
+    const stylingContent = await this.generateDocSection(componentDoc, "styling");
+    await this.saveFile(targetDir, "styling.md", stylingContent);
+
+    return targetDir;
   }
 }

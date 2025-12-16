@@ -60,8 +60,8 @@ export class DocumentationGenerator {
       }));
     }
 
-    // Dynamically find the parent props file
     const parentPropsPath = this.findParentPropsFile(baseClassName);
+    console.log(`Debug: Resolving parent ${baseClassName} -> ${parentPropsPath}`);
 
     if (!parentPropsPath) {
       console.warn(`Could not find props file for parent class: ${baseClassName}`);
@@ -70,9 +70,14 @@ export class DocumentationGenerator {
 
     try {
       const source = SourceExtractor.extractSourceContent(parentPropsPath);
+      // console.log(`Debug: Source length for ${baseClassName}: ${source?.length}`);
+
       if (source) {
         const propsInfo = TypeScriptParser.extractProps(source);
         if (propsInfo) {
+          console.log(`Debug: Extracted ${propsInfo.props.length} props for ${baseClassName}. Base: ${propsInfo.baseClass}`);
+          // propsInfo.props.forEach(p => console.log(`  - ${p.name}`));
+
           // Add parent's own props
           inheritedProps.push(
             ...propsInfo.props.map(prop => ({
@@ -99,34 +104,54 @@ export class DocumentationGenerator {
    * Find the props file for a parent class by searching the library
    * Handles BaseInputProps, BaseChartComponentProps, etc.
    */
+  /**
+   * Find the props file for a parent class by searching the library
+   * Handles BaseInputProps, BaseChartComponentProps, etc.
+   */
   private findParentPropsFile(className: string): string | null {
-    // Convert class name to file name pattern
-    // BaseInputProps -> baseinput
-    // BaseChartComponentProps -> basechart
-    // BaseWidgetProps -> basewidget
+    // 1. Clean the class name (remove Props/Component suffixes)
+    const baseName = className
+      .replace(/Props$/, '')
+      .replace(/Component$/, '');
 
-    let fileName = className
-      .replace(/Props$/, '')  // Remove 'Props' suffix
-      .replace(/Component$/, '')  // Remove 'Component' suffix
-      .toLowerCase();  // Convert to lowercase (baseinput, basechart, etc.)
+    // 2. Generate candidate file names
+    const candidates: string[] = [];
 
-    const propsFileName = `${fileName}.props.js.map`;
+    // Strategy A: Direct lowercase (e.g. BaseInput -> baseinput)
+    candidates.push(baseName.toLowerCase());
+
+    // Strategy B: Kebab case (e.g. PieChart -> pie-chart)
+    const toKebab = (str: string) => str.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
+    candidates.push(toKebab(baseName));
+
+    // Strategy C: Remove 'Wm' prefix and try both above
+    // (e.g. WmPieChart -> PieChart -> piechart, pie-chart)
+    if (baseName.startsWith('Wm')) {
+      const noPrefix = baseName.substring(2);
+      candidates.push(noPrefix.toLowerCase());
+      candidates.push(toKebab(noPrefix));
+    }
+
+    // Deduplicate
+    const uniqueCandidates = [...new Set(candidates)];
+    // console.log(`Looking for parent ${className} in:`, uniqueCandidates);
 
     // Search in common locations
     const searchPaths = [
-      // Check in components folder (most common)
       path.join(this.libraryPath, 'components'),
-      // Check in core folder
       path.join(this.libraryPath, 'core'),
     ];
 
-    for (const searchPath of searchPaths) {
-      if (!fs.existsSync(searchPath)) continue;
+    for (const fileName of uniqueCandidates) {
+      const propsFileName = `${fileName}.props.js.map`;
 
-      // Recursively search for the props file
-      const found = this.searchForFile(searchPath, propsFileName);
-      if (found) {
-        return found;
+      for (const searchPath of searchPaths) {
+        if (!fs.existsSync(searchPath)) continue;
+
+        const found = this.searchForFile(searchPath, propsFileName);
+        if (found) {
+          return found;
+        }
       }
     }
 
@@ -324,6 +349,30 @@ export class DocumentationGenerator {
         }
       }
 
+      // Check for child components
+      const childData: ComponentDoc[] = [];
+      const childConfig = this.config.childComponents[componentName];
+
+      if (childConfig) {
+        // console.log(`Processing children for ${componentName}...`, Object.keys(childConfig));
+        for (const [childName, relativePath] of Object.entries(childConfig)) {
+          const childPath = path.resolve(componentPath, relativePath);
+
+          if (fs.existsSync(childPath)) {
+            // Generate docs for the child
+            // Note: We use the same category as the parent
+            const childDoc = this.generateComponentDoc(childPath, category);
+            if (childDoc) {
+              // Override the name to match the key in config if needed, or keep extracted name
+              // Here we keep the extracted name but maybe we should ensure it matches
+              childData.push(childDoc);
+            }
+          } else {
+            console.warn(`Child component path not found: ${childPath} (for ${childName} in ${componentName})`);
+          }
+        }
+      }
+
       const doc: ComponentDoc = {
         componentName,
         componentPath,
@@ -333,6 +382,7 @@ export class DocumentationGenerator {
         events,
         styles,
         baseClass,
+        children: childData.length > 0 ? childData : undefined,
       };
 
       // Apply filters before returning
@@ -387,6 +437,48 @@ export class DocumentationGenerator {
   /**
    * Find all component directories in library
    */
+  /**
+   * Recursive function to find components in a directory
+   */
+  private findComponentsInDir(dirPath: string, category: string, components: Array<{ path: string; category: string }>): void {
+    const items = fs.readdirSync(dirPath, { withFileTypes: true });
+
+    // Check if this directory itself is a component
+    // We check for .component.js.map or .props.js.map files where the basename matches the folder name 
+    // OR just any .component.js.map file 
+    const hasComponentFiles = items.some(item =>
+      item.isFile() && (item.name.endsWith('.component.js.map') || item.name.endsWith('.props.js.map'))
+    );
+
+    if (hasComponentFiles) {
+      // It's a component!
+      const componentName = path.basename(dirPath);
+
+      // Check inclusions based on folder name
+      // Use includeComponents whitelist
+      if (this.config.includeComponents.includes(componentName)) {
+        components.push({ path: dirPath, category });
+      } else {
+        // console.log(`Skipping ${componentName} (not in includeComponents)`);
+      }
+
+      // We don't stop here, because nested components might exist (though unlikely in this specific structure, but safe to traverse)
+    }
+
+    // Recurse into subdirectories
+    for (const item of items) {
+      if (item.isDirectory()) {
+        // Skip node_modules or hidden folders
+        if (item.name.startsWith('.') || item.name === 'node_modules') continue;
+
+        this.findComponentsInDir(path.join(dirPath, item.name), category, components);
+      }
+    }
+  }
+
+  /**
+   * Find all component directories in library
+   */
   findAllComponents(): Array<{ path: string; category: string }> {
     const components: Array<{ path: string; category: string }> = [];
     const categoriesPath = path.join(this.libraryPath, 'components');
@@ -403,32 +495,10 @@ export class DocumentationGenerator {
 
     for (const category of categories) {
       const categoryPath = path.join(categoriesPath, category);
-      const items = fs.readdirSync(categoryPath, { withFileTypes: true });
-
-      for (const item of items) {
-        if (item.isDirectory()) {
-          const componentName = item.name;
-
-          // Skip excluded components
-          if (this.config.excludeComponents.includes(componentName)) {
-            continue;
-          }
-
-          const componentPath = path.join(categoryPath, componentName);
-
-          // Check if it has component files
-          const files = fs.readdirSync(componentPath);
-          const hasComponentFiles = files.some(f =>
-            f.endsWith('.component.js.map') || f.endsWith('.props.js.map')
-          );
-
-          if (hasComponentFiles) {
-            components.push({ path: componentPath, category });
-          }
-        }
-      }
+      this.findComponentsInDir(categoryPath, category, components);
     }
 
+    // Filter duplicates if any (though path key should be unique)
     return components;
   }
 

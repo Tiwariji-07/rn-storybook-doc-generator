@@ -9,6 +9,20 @@ dotenv.config();
 
 export interface GeneratorConfig {
   /**
+   * Components to include in documentation generation (whitelist)
+   */
+  includeComponents: string[];
+
+  /**
+   * Child components mapping: Parent -> { ChildName: RelativePath }
+   */
+  childComponents: {
+    [parentName: string]: {
+      [childName: string]: string;
+    };
+  };
+
+  /**
    * Categories to exclude from documentation generation
    */
   excludeCategories: string[];
@@ -88,8 +102,95 @@ export interface GeneratorConfig {
  */
 export const DEFAULT_CONFIG: GeneratorConfig = {
   // Component discovery exclusions
-  excludeCategories: ["page", "prefab"],
-  excludeComponents: [],
+  includeComponents: [
+
+    'accordion',
+    'anchor',
+    'audio',
+    'bar-chart',
+    'bottomsheet',
+    'bubble-chart',
+    'button',
+    'button-group',
+    'calendar',
+    'camera', // device/camera
+    'card',
+    'carousel',
+    'checkbox',
+    'checkboxset',
+    'chips',
+    'column-chart',
+    'currency',
+    'date',
+    'datetime',
+    'dialog', // mapped from 'Design dialog'
+    'donut-chart',
+    'fileupload',
+    'form',
+    'icon',
+    'picture', // picture -> mapped to image/picture? No, folder is 'picture'. User asked for 'Picture'.
+    'label',
+    'layoutgrid',
+    'line-chart',
+    'linearlayout', // User asked for 'LinearLayout'
+    'list',
+    'liveform',
+    'login',
+    'lottie',
+    'menu',
+    'message',
+    'modal', // User asked for 'Design dialog'? No 'Design dialog' -> dialogs/dialog. 'Modal' -> basic/modal.
+    'navbar',
+    'number',
+    'panel',
+    'pie-chart',
+    'popover',
+    'progress-bar',
+    'progress-circle',
+    'radioset',
+    'rating',
+    'search',
+    'select',
+    'selectlocale', // Not found in scanning
+    'slider',
+    'spinner',
+    'switch',
+    'tabs',
+    'text',
+    'textarea',
+    'tile',
+    'time',
+    'toggle',
+    'tooltip',
+    'video',
+    'webview',
+    'wizard',
+    'barcodescanner', // device/barcodescanner
+    'alertdialog', // dialogs/alertdialog
+    'confirmdialog', // dialogs/confirmdialog
+    'area-chart', // chart/area-chart
+  ],
+
+  childComponents: {
+    'accordion': {
+      'accordion-pane': './accordionpane',
+    },
+    'dialog': {
+      'dialog-content': '../dialogcontent',
+      'dialog-actions': '../dialogactions',
+    }
+  },
+
+  excludeCategories: [
+    'node_modules',
+    '.git',
+    'dist',
+    'coverage',
+  ],
+
+  excludeComponents: [
+    // Deprecated by includeComponents, keeping for reference or mixed usage if needed
+  ],
 
   // Documentation content filtering
   documentation: {
