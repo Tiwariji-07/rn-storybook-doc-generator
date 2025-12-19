@@ -186,6 +186,8 @@ export const DEFAULT_CONFIG: GeneratorConfig = {
     '.git',
     'dist',
     'coverage',
+    'prefabs',
+    'page'
   ],
 
   excludeComponents: [
@@ -204,6 +206,9 @@ export const DEFAULT_CONFIG: GeneratorConfig = {
       "deferload", // Advanced feature
       "isdefault", // Internal flag
       "key", // React internal
+      "id",
+      "name",
+      "children"
     ],
 
     // Internal methods not meant for public use
