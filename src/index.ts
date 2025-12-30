@@ -24,7 +24,7 @@ program
   .option('-a, --all', 'Generate docs for all components')
   .option('-c, --component <name>', 'Generate docs for a specific component')
   .option('-o, --output <path>', 'Output directory', './output')
-  .option('-l, --library <path>', 'Path to @wavemaker/app-rn-runtime', '../rn-widgets-storybook/node_modules/@wavemaker/app-rn-runtime')
+  .option('-l, --library <path>', 'Path to @wavemaker/app-rn-runtime', process.env.STORYBOOK_PATH + '/node_modules/@wavemaker/app-rn-runtime')
   .option('--single-file', 'Generate a single JSON file with all components')
   .option('--with-docs', 'Generate markdown documentation using LLM (requires ANTHROPIC_API_KEY)')
   .action(async (options) => {
@@ -123,22 +123,40 @@ program
     } else if (options.component) {
       console.log(`Generating documentation for ${options.component}...\n`);
 
-      // Find the component
+      // Check if this is an alias component
+      const aliasSource = DEFAULT_CONFIG.componentAliases[options.component.toLowerCase()];
+
+      // Find the component (or source component for aliases)
       const components = generator.findAllComponents();
+      const searchName = aliasSource || options.component;
       const component = components.find(c =>
-        path.basename(c.path).toLowerCase() === options.component.toLowerCase()
+        path.basename(c.path).toLowerCase() === searchName.toLowerCase() && !c.aliasOf
       );
 
       if (!component) {
         console.error(`Error: Component '${options.component}' not found`);
         console.error('\nAvailable components:');
-        components.forEach(c => {
+        // Show regular components
+        components.filter(c => !c.aliasOf).forEach(c => {
           console.error(`  - ${path.basename(c.path)} (${c.category})`);
+        });
+        // Show alias components
+        Object.keys(DEFAULT_CONFIG.componentAliases).forEach(alias => {
+          const source = DEFAULT_CONFIG.componentAliases[alias];
+          console.error(`  - ${alias} (alias of ${source})`);
         });
         process.exit(1);
       }
 
-      const doc = generator.generateComponentDoc(component.path, component.category);
+      let doc;
+      if (aliasSource) {
+        // Generate alias doc
+        console.log(`  (${options.component} is an alias of ${aliasSource})\n`);
+        doc = generator.generateDocForAlias(options.component, component.path, component.category);
+      } else {
+        doc = generator.generateComponentDoc(component.path, component.category);
+      }
+
       if (doc) {
         generator.saveComponentDoc(doc, outputPath);
         console.log('\n✓ JSON documentation generated successfully!');

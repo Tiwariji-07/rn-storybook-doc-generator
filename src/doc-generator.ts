@@ -479,8 +479,8 @@ export class DocumentationGenerator {
   /**
    * Find all component directories in library
    */
-  findAllComponents(): Array<{ path: string; category: string }> {
-    const components: Array<{ path: string; category: string }> = [];
+  findAllComponents(): Array<{ path: string; category: string; aliasOf?: string }> {
+    const components: Array<{ path: string; category: string; aliasOf?: string }> = [];
     const categoriesPath = path.join(this.libraryPath, 'components');
 
     if (!fs.existsSync(categoriesPath)) {
@@ -498,8 +498,44 @@ export class DocumentationGenerator {
       this.findComponentsInDir(categoryPath, category, components);
     }
 
+    // Add alias components: these use props from another component
+    // e.g., selectlocale uses select's props
+    for (const [aliasName, sourceComponent] of Object.entries(this.config.componentAliases)) {
+      // Find the source component in the discovered list
+      const source = components.find(c => path.basename(c.path) === sourceComponent);
+      if (source) {
+        // Add alias component with same path but marked as alias
+        components.push({
+          path: source.path,
+          category: source.category,
+          aliasOf: sourceComponent,
+        });
+      } else {
+        console.warn(`Alias source component '${sourceComponent}' not found for alias '${aliasName}'`);
+      }
+    }
+
     // Filter duplicates if any (though path key should be unique)
     return components;
+  }
+
+  /**
+   * Generate documentation for an alias component
+   * Uses props from the source component but with a different component name
+   */
+  generateDocForAlias(aliasName: string, sourceComponentPath: string, category: string): ComponentDoc | null {
+    const sourceDoc = this.generateComponentDoc(sourceComponentPath, category);
+    if (!sourceDoc) {
+      return null;
+    }
+
+    // Return doc with alias name but source's props/methods/etc
+    return {
+      ...sourceDoc,
+      componentName: aliasName,
+      componentPath: sourceComponentPath, // Keep source path for reference
+      description: `Alias of ${sourceDoc.componentName}`,
+    };
   }
 
   /**
@@ -511,13 +547,27 @@ export class DocumentationGenerator {
 
     console.log(`Found ${components.length} components`);
 
-    for (const { path: componentPath, category } of components) {
+    for (const { path: componentPath, category, aliasOf } of components) {
       const componentName = path.basename(componentPath);
-      console.log(`Generating docs for ${category}/${componentName}...`);
 
-      const doc = this.generateComponentDoc(componentPath, category);
-      if (doc) {
-        docs.push(doc);
+      if (aliasOf) {
+        // This is an alias - find the alias name and generate with alias method
+        const aliasName = Object.entries(this.config.componentAliases)
+          .find(([_, source]) => source === aliasOf)?.[0];
+
+        if (aliasName) {
+          console.log(`Generating docs for ${aliasName} (alias of ${aliasOf})...`);
+          const doc = this.generateDocForAlias(aliasName, componentPath, category);
+          if (doc) {
+            docs.push(doc);
+          }
+        }
+      } else {
+        console.log(`Generating docs for ${category}/${componentName}...`);
+        const doc = this.generateComponentDoc(componentPath, category);
+        if (doc) {
+          docs.push(doc);
+        }
       }
     }
 

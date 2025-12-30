@@ -23,6 +23,14 @@ export interface GeneratorConfig {
   };
 
   /**
+   * Component aliases: maps a component name to use props from another component
+   * Useful for components like selectlocale that reuse select's props
+   */
+  componentAliases: {
+    [componentName: string]: string; // componentName -> uses props from this component
+  };
+
+  /**
    * Categories to exclude from documentation generation
    */
   excludeCategories: string[];
@@ -102,83 +110,135 @@ export interface GeneratorConfig {
  */
 export const DEFAULT_CONFIG: GeneratorConfig = {
   // Component discovery exclusions
+  // 64 components matching ExpoStorybook10/components exactly
   includeComponents: [
-
-    'accordion',
-    'anchor',
-    'audio',
-    'bar-chart',
-    'bottomsheet',
-    'bubble-chart',
-    'button',
-    'button-group',
-    'calendar',
-    'camera', // device/camera
-    'card',
-    'carousel',
-    'checkbox',
-    'checkboxset',
-    'chips',
-    'column-chart',
-    'currency',
-    'date',
-    'datetime',
-    'dialog', // mapped from 'Design dialog'
-    'donut-chart',
-    'fileupload',
-    'form',
-    'icon',
-    'picture', // picture -> mapped to image/picture? No, folder is 'picture'. User asked for 'Picture'.
-    'label',
-    'layoutgrid',
-    'line-chart',
-    'linearlayout', // User asked for 'LinearLayout'
-    'list',
-    'liveform',
-    'login',
-    'lottie',
-    'menu',
-    'message',
-    'modal', // User asked for 'Design dialog'? No 'Design dialog' -> dialogs/dialog. 'Modal' -> basic/modal.
-    'navbar',
-    'number',
-    'panel',
-    'pie-chart',
-    'popover',
-    'progress-bar',
-    'progress-circle',
-    'radioset',
-    'rating',
-    'search',
-    'select',
-    'selectlocale', // Not found in scanning
-    'slider',
-    'spinner',
-    'switch',
-    'tabs',
-    'text',
-    'textarea',
-    'tile',
-    'time',
-    'toggle',
-    'tooltip',
-    'video',
-    'webview',
-    'wizard',
-    'barcodescanner', // device/barcodescanner
-    'alertdialog', // dialogs/alertdialog
-    'confirmdialog', // dialogs/confirmdialog
-    'area-chart', // chart/area-chart
+    'accordion',        // WmAccordion -> container/accordion
+    'alertdialog',      // WmAlertDialog -> dialogs/alertdialog
+    'anchor',           // WmAnchor -> basic/anchor
+    'area-chart',       // WmAreaChart -> chart/area-chart
+    'bar-chart',        // WmBarChart -> chart/bar-chart
+    'barcodescanner',   // WmBarcodescanner -> device/barcodescanner
+    'bottomsheet',      // WmBottomSheet -> basic/bottomsheet
+    'bubble-chart',     // WmBubbleChart -> chart/bubble-chart
+    'button',           // WmButton -> basic/button
+    'buttongroup',      // WmButtonGroup -> basic/buttongroup
+    'calendar',         // WmCalendar -> input/calendar
+    'camera',           // WmCamera -> device/camera
+    'card',             // WmCard -> data/card
+    'carousel',         // WmCarousel -> advanced/carousel
+    'checkbox',         // WmCheckbox -> input/checkbox
+    'checkboxset',      // WmCheckboxSet -> input/checkboxset
+    'chips',            // WmChips -> input/chips
+    'column-chart',     // WmColumnChart -> chart/column-chart
+    'confirmdialog',    // WmConfirmDialog -> dialogs/confirmdialog
+    'container',        // WmContainer -> container
+    'currency',         // WmCurrency -> input/currency
+    'date',             // WmDate & WmDatetime -> input/epoch/date
+    'datetime',         // WmDate & WmDatetime -> input/epoch/datetime
+    'dialog',           // WmDesignDialog -> dialogs/dialog
+    'donut-chart',      // WmDonutChart -> chart/donut-chart
+    'fileupload',       // WmFileUpload -> input/fileupload
+    'form',             // WmForm -> data/form
+    'icon',             // WmIcon -> basic/icon
+    'label',            // WmLabel -> basic/label
+    'layoutgrid',       // WmGridLayout -> container/layoutgrid
+    'line-chart',       // WmLineChart -> chart/line-chart
+    'linearlayout',     // WmLinearLayout -> container/linearlayout
+    'list',             // WmList -> data/list
+    'liveform',         // WmLiveForm -> data/liveform
+    'login',            // WmLogin -> advanced/login
+    'lottie',           // WmLottie -> basic/lottie
+    'menu',             // WmMenu -> navigation/menu
+    'message',          // WmMessage -> basic/message
+    'navbar',           // WmNavbar -> navigation/navbar
+    'number',           // WmNumber -> input/number
+    'panel',            // WmPanel -> container/panel
+    'picture',          // WmPicture -> basic/picture
+    'pie-chart',        // WmPieChart -> chart/pie-chart
+    'popover',          // WmPopover -> navigation/popover
+    'progress-bar',     // WmProgressBar -> basic/progress-bar
+    'progress-circle',  // WmProgressCircle -> basic/progress-circle
+    'radioset',         // WmRadioSet -> input/radioset
+    'rating',           // WmRating -> input/rating
+    'search',           // WmSearch -> basic/search
+    'select',           // WmSelect -> input/select
+    'selectlocale',     // WmSelectLocale -> input/select
+    'slider',           // WmSlider -> input/slider
+    'spinner',          // WmSpinner -> basic/spinner
+    'switch',           // WmSwitch -> input/switch
+    'tabs',             // WmTabs -> container/tabs
+    'text',             // WmText -> input/text
+    'textarea',         // WmTextarea -> input/textarea
+    'tile',             // WmTile -> container/tile
+    'time',             // WmTime -> input/epoch/time
+    'toggle',           // WmToggle -> input/toggle
+    'tooltip',          // WmTooltip -> basic/tooltip
+    'video',            // WmVideo -> basic/video
+    'webview',          // WmWebview -> advanced/webview
+    'wizard',           // WmWizard -> container/wizard
   ],
 
   childComponents: {
+    // Container children
     'accordion': {
-      'accordion-pane': './accordionpane',
+      'accordionpane': './accordionpane',
     },
+    'layoutgrid': {
+      'gridrow': './gridrow',
+      'gridcolumn': './gridcolumn',
+    },
+    'linearlayout': {
+      'linearlayoutitem': './linearlayoutitem',
+    },
+    'panel': {
+      'panel-content': './panel-content',
+      'panel-footer': './panel-footer',
+    },
+    'tabs': {
+      'tabpane': './tabpane',
+      'tabheader': './tabheader',
+    },
+    'wizard': {
+      'wizardstep': './wizardstep',
+    },
+    // Data children
+    'card': {
+      'card-content': './card-content',
+      'card-footer': './card-footer',
+    },
+    'list': {
+      'list-template': './list-template',
+      'list-action-template': './list-action-template',
+    },
+    'form': {
+      'form-body': './form-body',
+      'form-field': './form-field',
+      'form-action': './form-action',
+      'form-footer': './form-footer',
+    },
+    // Advanced children
+    'carousel': {
+      'carousel-content': './carousel-content',
+      'carousel-template': './carousel-template',
+    },
+    // Dialog children (shared across all dialog types)
     'dialog': {
-      'dialog-content': '../dialogcontent',
-      'dialog-actions': '../dialogactions',
-    }
+      'dialogcontent': '../dialogcontent',
+      'dialogactions': '../dialogactions',
+    },
+    'alertdialog': {
+      'dialogcontent': '../dialogcontent',
+      'dialogactions': '../dialogactions',
+    },
+    'confirmdialog': {
+      'dialogcontent': '../dialogcontent',
+      'dialogactions': '../dialogactions',
+    },
+  },
+
+  // Component aliases: use props from another component
+  componentAliases: {
+    'selectlocale': 'select', // selectlocale uses select's props
   },
 
   excludeCategories: [
@@ -197,7 +257,7 @@ export const DEFAULT_CONFIG: GeneratorConfig = {
   // Documentation content filtering
   documentation: {
     // Common props that clutter documentation
-    excludeProps: [],
+    excludeProps: ["children", "renderItem"],
 
     // Inherited props that are rarely used in stories
     excludeInheritedProps: [
@@ -208,7 +268,8 @@ export const DEFAULT_CONFIG: GeneratorConfig = {
       "key", // React internal
       "id",
       "name",
-      "children"
+      "children",
+      "renderItem"
     ],
 
     // Internal methods not meant for public use
@@ -238,7 +299,7 @@ export const DEFAULT_CONFIG: GeneratorConfig = {
       | "ollama",
     model: process.env.AI_MODEL || "claude-sonnet-4-0",
     storybookPath: process.env.STORYBOOK_PATH || "../rn-widgets-storybook",
-    batchSize: parseInt(process.env.BATCH_SIZE || "5"),
+    batchSize: parseInt(process.env.BATCH_SIZE || "10"),
   },
 };
 

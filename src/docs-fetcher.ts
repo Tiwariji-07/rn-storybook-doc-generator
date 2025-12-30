@@ -8,18 +8,40 @@ const GITHUB_RAW_BASE = 'https://raw.githubusercontent.com/wavemaker/docs/master
  * Mapping of component names to their documentation paths in the WaveMaker docs repo
  * This is needed because the folder structure is not consistent
  */
-export const DOC_PATH_MAPPING: Record<string, string> = {
-    // Container widgets
+/**
+ * Documentation path mapping for all 64 Storybook components
+ * Maps component names to their documentation file paths in the docs-master repo
+ * Some components may have multiple related docs (listed as arrays would require code changes)
+ */
+export const DOC_PATH_MAPPING: Record<string, string | string[]> = {
+    // ============ Container Widgets ============
     'accordion': 'container/accordion.md',
-    'tabs': 'container/tabs.md',
+    'container': 'container/container.md',
+    'layoutgrid': 'container/grid-layout.md',
+    'linearlayout': 'container/layout.md',
     'panel': 'container/panel.md',
+    'tabs': 'container/tabs.md',
     'tile': 'container/tile.md',
     'wizard': 'container/wizard.md',
-    'layoutgrid': 'container/grid-layout.md',
 
-    // Form widgets
+    // ============ Basic Widgets ============
+    'anchor': 'basic/anchor.md',
+    'icon': 'basic/icon.md',
+    'label': 'basic/label.md',
+    'lottie': 'basic/lottie.md',
+    'message': 'basic/message.md',
+    'picture': 'basic/picture.md',
+    'progress-bar': 'basic/progress-bar.md',
+    'progress-circle': 'basic/progress-circle.md',
+    'search': 'basic/search.md',
+    'spinner': 'basic/spinner.md',
+    'video': 'basic/video.md',
+    'tooltip': 'navigation/popover.md', // Tooltip docs are in popover
+
+    // ============ Form Input Widgets ============
     'button': 'form-widgets/button.md',
-    'button-group': 'form-widgets/button-group.md',
+    'buttongroup': 'form-widgets/button-group.md',
+    'calendar': 'form-widgets/calendar.md',
     'checkbox': 'form-widgets/checkbox.md',
     'checkboxset': 'form-widgets/checkboxset.md',
     'chips': 'form-widgets/chips.md',
@@ -38,26 +60,53 @@ export const DOC_PATH_MAPPING: Record<string, string> = {
     'text': 'form-widgets/text.md',
     'textarea': 'form-widgets/textarea.md',
     'toggle': 'form-widgets/toggle.md',
-    'calendar': 'form-widgets/calendar.md',
 
-    // Basic widgets
-    'anchor': 'basic/anchor.md',
-    'audio': 'basic/audio.md',
-    'icon': 'basic/icon.md',
-    'label': 'basic/label.md',
-    'lottie': 'basic/lottie.md',
-    'message': 'basic/message.md',
-    'picture': 'basic/picture.md',
-    'progress-bar': 'basic/progress-bar.md',
-    'progress-circle': 'basic/progress-circle.md',
-    'search': 'basic/search.md',
-    'spinner': 'basic/spinner.md',
-    'video': 'basic/video.md',
+    // ============ Chart Widgets ============
+    'area-chart': 'chart/chart-widget.md',
+    'bar-chart': 'chart/chart-widget.md',
+    'bubble-chart': 'chart/chart-widget.md',
+    'column-chart': 'chart/chart-widget.md',
+    'donut-chart': 'chart/chart-widget.md',
+    'line-chart': 'chart/chart-widget.md',
+    'pie-chart': 'chart/chart-widget.md',
 
-    // Dialog widgets
+    // ============ Data Widgets ============
+    'card': [
+        'datalive/cards.md',
+        'datalive/cards/cards-properties-events-methods.md',
+    ],
+    'list': [
+        'datalive/list.md',
+        'datalive/list/list-properties-events-methods.md',
+    ],
+    'form': [
+        'datalive/form.md',
+        'datalive/form/form-events-methods.md',
+    ],
+    'liveform': [
+        'datalive/live-form.md',
+        'datalive/live-form/events-methods.md',
+    ],
+
+    // ============ Navigation Widgets ============
+    'menu': 'navigation/dropdown-menu.md',
+    'navbar': 'navigation/nav-bar.md',
+    'popover': 'navigation/popover.md',
+
+    // ============ Dialog Widgets ============
     'dialog': 'design-dialog.md',
     'alertdialog': 'alert-dialog.md',
     'confirmdialog': 'confirm-dialog.md',
+
+    // ============ Advanced Widgets ============
+    'carousel': 'advanced/carousel.md',
+    'login': 'advanced/login.md',
+    'webview': 'mobile-widgets/media-list.md', // No specific webview doc
+
+    // ============ Mobile/Device Widgets ============
+    'barcodescanner': 'mobile-widgets/barcode-scanner.md',
+    'bottomsheet': 'mobile-widgets/bottom-sheet.md',
+    'camera': 'mobile-widgets/camera.md',
 };
 
 /**
@@ -73,22 +122,36 @@ export async function fetchDocContent(componentName: string): Promise<string | n
         return null;
     }
 
-    const url = `${GITHUB_RAW_BASE}/${docPath}`;
+    // Handle single path or array of paths
+    const paths = Array.isArray(docPath) ? docPath : [docPath];
+    const contents: string[] = [];
 
-    try {
-        console.log(`📥 Fetching existing docs for ${componentName} from GitHub...`);
-        const response = await fetch(url);
+    for (const path of paths) {
+        const url = `${GITHUB_RAW_BASE}/${path}`;
 
-        if (!response.ok) {
-            console.warn(`⚠ Failed to fetch docs for ${componentName}: ${response.status}`);
-            return null;
+        try {
+            console.log(`📥 Fetching docs from: ${path}...`);
+            const response = await fetch(url);
+
+            if (!response.ok) {
+                console.warn(`⚠ Failed to fetch docs from ${path}: ${response.status}`);
+                continue;
+            }
+
+            const content = await response.text();
+            console.log(`✓ Fetched ${content.length} bytes from ${path}`);
+            contents.push(content);
+        } catch (error) {
+            console.error(`✗ Error fetching docs from ${path}:`, error);
         }
+    }
 
-        const content = await response.text();
-        console.log(`✓ Fetched ${content.length} bytes of existing documentation`);
-        return content;
-    } catch (error) {
-        console.error(`✗ Error fetching docs for ${componentName}:`, error);
+    if (contents.length === 0) {
         return null;
     }
+
+    // Concatenate multiple docs with separator
+    const result = contents.join('\n\n---\n\n');
+    console.log(`✓ Total: ${result.length} bytes of documentation for ${componentName}`);
+    return result;
 }
